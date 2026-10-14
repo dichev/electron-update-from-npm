@@ -17,16 +17,16 @@ Requires Electron 30+. ESM-only (from CommonJS, use `await import()`).
 ```js
 import { checkForUpdate, installUpdate } from 'electron-npm-installer'
 
-const update = await checkForUpdate() // → { name: 'my-app', current: '1.2.0', latest: '1.3.0', mode: 'npm-global' }, or null if up to date
+const update = await checkForUpdate() // → { name: 'my-app', current: '1.2.0', latest: '1.3.0', mode: 'npm-global', spec: 'my-app@1.3.0' }, or null
 installUpdate()                       // installs that version: closes the app, updates it, opens it again
 ```
 
 Show a "New version available" button when `checkForUpdate()` returns something, and call `installUpdate()` when it's clicked.
 
-`checkForUpdate()` asks npm once and shares the answer. For an app that stays open for days, ask again now and then:
+`checkForUpdate()` checks once and shares the answer. For an app that stays open for days, ask again now and then:
 
 ```js
-setInterval(() => checkForUpdate({ fresh: true }).then(showUpdateButton), 6 * 60 * 60_000)
+setInterval(() => checkForUpdate({ fresh: true }).then(update => update?.spec && showUpdateButton(update)), 6 * 60 * 60_000)
 ```
 
 No update UI of your own? Let the package ask in a native dialog:
@@ -48,6 +48,22 @@ What `checkForUpdate()` returns:
 - **Installed with `npm i -g`:** the new version, if there is one.
 - **Run with `npx`:** always returns a result, so you can offer a proper global install (npx's copy is temporary).
 - **Run from a repo checkout:** always `null`. Pass `checkForUpdate({ dev: true })` to try the flow anyway; it updates your global install and doesn't reopen.
+
+### Installed from git
+
+For an app installed with `npm i -g github:owner/repo#…` rather than from npm, point the check at the repo:
+
+```js
+checkForUpdate({ source: 'github:owner/repo' }) // → { …, latest: '0.1.0-build.42', spec: 'github:owner/repo#v0.1.0-build.42' }
+```
+
+The check reads the repo's tags with `git ls-remote`, takes the highest `v<version>` tag, and installs exactly that tag. So your publishing workflow has to tag every build `v<version>`, matching the version it sets in `package.json`, and grow that version each time, e.g. `npm pkg set version=0.1.0-build.${{ github.run_number }}` (semver orders `-build.42` after `-build.9`). Each tag keeps its build in the repo for good, so prune old ones (keep the last 20 or so).
+
+It uses the same git credentials as `npm i -g`, but never asks for them in the background. When git can't sign in, or isn't installed, `checkForUpdate()` returns a problem instead of an update, for you to show (`promptForUpdate({ source })` shows it once per launch):
+
+```js
+{ problem: 'sign-in', message: "git couldn't sign in to github.com", fix: 'git ls-remote https://github.com/owner/repo.git' } // run once in a terminal
+```
 
 ## Shortcuts
 

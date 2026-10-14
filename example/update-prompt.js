@@ -5,6 +5,6 @@ import { checkForUpdate, promptForUpdate } from '../src/index.js'
 
 app.whenReady().then(async () => {
   if (!await checkForUpdate({ dev: true })) console.log('No update found: are you online?')
-  await promptForUpdate()
+  await promptForUpdate({ dev: true })
   app.quit()
 })

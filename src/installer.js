@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util'
 
 // ── 1. CLI, then wait for the app to exit ────────────────────────────────────
 
-const { values, positionals: [pid, name, version] } = parseArgs({
+const { values, positionals: [pid, name, spec] } = parseArgs({
   allowPositionals: true,
   options: {
     'reopen': { type: 'string' },
@@ -17,8 +17,8 @@ const { values, positionals: [pid, name, version] } = parseArgs({
   },
 })
 
-if (values.help || !version) {
-  console.error('Usage: node installer.js <pid> <package> <version> [--reopen <bin path inside the package>]')
+if (values.help || !spec) {
+  console.error('Usage: node installer.js <pid> <package> <spec: name@version or github:owner/repo#tag> [--reopen <bin path inside the package>]')
   process.exit(1)
 }
 
@@ -34,7 +34,7 @@ while (true) {
 
 // ── 2. Update and reopen ─────────────────────────────────────────────────────
 
-const { status } = spawnSync(`npm i -g ${name}@${version} --loglevel=http`, { shell: true, stdio: 'inherit' })
+const { status } = spawnSync(`npm i -g ${spec} --loglevel=http`, { shell: true, stdio: 'inherit' })
 if (status !== 0) await sleep(5_000) // leaves npm's error readable before the window closes
 
 // Reopen even after a failed update
