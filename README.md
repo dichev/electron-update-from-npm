@@ -79,7 +79,7 @@ updater.launchMode      // 'npm-global' | 'npx-temp' | 'npm-start' (repo checkou
 
 ## Bundling
 
-If you bundle your main process, keep this package external, so it stays in `node_modules` next to the `installer.js` it starts. By default electron-vite 5+ does this for everything in `dependencies`, but elsewhere mark it yourself:
+If you bundle your main process, keep this package external, so it stays in `node_modules` next to the `bin/update.js` it starts. By default electron-vite 5+ does this for everything in `dependencies`, but elsewhere mark it yourself:
 
 ```js
 build: { rollupOptions: { external: ['electron-update-from-npm'] } } // Vite; esbuild: --external:electron-update-from-npm

@@ -23,7 +23,7 @@ function installAt(...segments) {
 }
 
 async function launch(options = { appId: 'com.example.my-app', name: 'My App' }, updaterOptions) {
-  const { NpmUpdater } = await import('../src/NpmUpdater.js')
+  const { NpmUpdater } = await import('../src/updater.js')
   new NpmUpdater({ name: 'my-app', version: '1.0.0' }, updaterOptions).createShortcuts(options)
 }
 

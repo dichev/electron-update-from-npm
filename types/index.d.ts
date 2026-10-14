@@ -1,5 +1,5 @@
 import type { LaunchMode } from './launch-mode.js'
-export { LAUNCH_MODES, launchMode, type LaunchMode } from './launch-mode.js'
+export { LAUNCH_MODES, type LaunchMode } from './launch-mode.js'
 
 /** Your app's package.json: what to check on npm, the running version, and the `bin` that reopens the app after an update. */
 export interface AppPackage {

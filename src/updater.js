@@ -9,7 +9,7 @@ import semver from 'semver'
 import { LAUNCH_MODES, launchMode } from './launch-mode.js'
 import { writeShortcuts } from './shortcuts.js'
 
-const INSTALLER_PATH = join(import.meta.dirname, 'installer.js')
+const UPDATE_SCRIPT = join(import.meta.dirname, '../bin/update.js')
 
 export class NpmUpdater {
   #pkg
@@ -55,7 +55,7 @@ export class NpmUpdater {
     const bin = binPath(this.#pkg)
     // Dev isn't reopened: its renderer usually lives on a dev server, which dies with the app
     const reopen = this.#mode !== LAUNCH_MODES.NPM_DEV && bin ? ['--reopen', bin] : []
-    const args = [INSTALLER_PATH, process.pid, this.#pkg.name, spec, ...reopen].map(String)
+    const args = [UPDATE_SCRIPT, process.pid, this.#pkg.name, spec, ...reopen].map(String)
     // The system node, not our electron.exe: npm can't replace the package while anything runs inside it.
     // @windows `start` opens a console showing the progress; its title needs a space, or node leaves it unquoted and `start` runs it
     const [command, commandArgs] = process.platform === 'win32' ? ['cmd', ['/c', 'start', `Updating ${app.getName()}`, 'node', ...args]] : ['node', args]
@@ -96,7 +96,7 @@ export class NpmUpdater {
   async #fetchNewer() {
     if (this.#mode === LAUNCH_MODES.NPM_START) return null
     const { name, version: current } = this.#pkg
-    const { latest, spec } = this.#source ? await (await import('./git.js')).latestTag(this.#source) : await latestOnNpm(name) // git only loads for a git source
+    const { latest, spec } = this.#source ? await (await import('./git-tags.js')).latestTag(this.#source) : await latestOnNpm(name) // git only loads for a git source
     // npx isn't updated in place: it's always offered the global install instead
     if (this.#mode === LAUNCH_MODES.NPX_TEMP) return { type: 'install', current, latest, spec }
     return semver.gt(latest, current) ? { type: 'update', current, latest, spec } : null

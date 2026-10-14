@@ -1,6 +1,6 @@
 // check() reports a newer release on npm or in a git source's tags, only for an `npm i -g` install (and dev,
-// for debugging), and install() installs it through installer.js. These tests pin who is asked, when a version
-// counts as newer, which failures stay silent and which reach the user, and what the installer is handed.
+// for debugging), and install() installs it through bin/update.js. These tests pin who is asked, when a version
+// counts as newer, which failures stay silent and which reach the user, and what the update script is handed.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Hoisted, so the mocked modules share them
@@ -20,14 +20,14 @@ vi.mock('node:child_process', () => ({ spawn: mocks.spawn, execFile: mocks.execF
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 
-const INSTALLER_PATH = join(import.meta.dirname, '../src/installer.js')
+const UPDATE_SCRIPT = join(import.meta.dirname, '../bin/update.js')
 const PKG = { name: 'my-app', version: '1.10.1', bin: { 'my-app': 'bin/my-app.mjs' } }
 const DIRS = { 'npm-global': '/npm/node_modules/my-app', 'npx-temp': '/home/u/.npm/_npx/ab12/node_modules/my-app', 'npm-start': '/src/my-app' }
 
 // A fresh app launch, with its own updater
 async function launch(mode, options) {
   mocks.appPath = DIRS[mode] ?? DIRS['npm-start']
-  const { NpmUpdater } = await import('../src/NpmUpdater.js')
+  const { NpmUpdater } = await import('../src/updater.js')
   return new NpmUpdater(PKG, { dev: mode === 'npm-dev', ...options })
 }
 
@@ -49,18 +49,18 @@ function publish(version, { ok = true } = {}) {
   return mocks.latestVersion
 }
 
-let installer // the spawned installer process; each test decides whether it emits 'spawn' or 'error'
+let updateProcess // the spawned update script; each test decides whether it emits 'spawn' or 'error'
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.execFile.mockReset()
-  mocks.spawn.mockImplementation(() => installer = new EventEmitter())
+  mocks.spawn.mockImplementation(() => updateProcess = new EventEmitter())
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 describe('new NpmUpdater', () => {
   it("throws without the app's package.json, as it couldn't tell what to check", async () => {
-    const { NpmUpdater } = await import('../src/NpmUpdater.js')
+    const { NpmUpdater } = await import('../src/updater.js')
     expect(() => new NpmUpdater()).toThrow(/package\.json/)
   })
 
@@ -223,7 +223,7 @@ describe('a git source', () => {
     expect(await checkGit()).toMatchObject({ problem: 'git-missing' })
   })
 
-  it('has the installer install the tag it found', async () => {
+  it('has the update script install the tag it found', async () => {
     lsRemote(TAGS)
     await launchAndInstall('npm-global', GIT)
     expect(spawnedArgv().slice(-4)).toEqual(['my-app', 'github:me/my-app#v1.11.0-build.10', '--reopen', 'bin/my-app.mjs'])
@@ -252,12 +252,12 @@ describe('install', () => {
     expect(spawnedArgv()).toContain('my-app@1.11.0')
   })
 
-  it('hands off to the installer with everything it needs, then quits once it runs', async () => {
+  it('hands off to the update script with everything it needs, then quits once it runs', async () => {
     publish('1.11.0')
     await launchAndInstall('npm-global')
     expect(spawnedArgv().slice(-7)).toEqual([
       'node',
-      INSTALLER_PATH,
+      UPDATE_SCRIPT,
       String(process.pid),
       'my-app',
       'my-app@1.11.0',
@@ -266,14 +266,14 @@ describe('install', () => {
     ])
     expect(mocks.spawn.mock.calls[0][2]).toMatchObject({ detached: true })
     expect(mocks.app.quit).not.toHaveBeenCalled()
-    installer.emit('spawn')
+    updateProcess.emit('spawn')
     expect(mocks.app.quit).toHaveBeenCalled()
   })
 
   it('stays open and says why when node cannot be started', async () => {
     publish('1.11.0')
     await launchAndInstall('npm-global')
-    installer.emit('error', new Error('spawn node ENOENT'))
+    updateProcess.emit('error', new Error('spawn node ENOENT'))
     expect(mocks.app.quit).not.toHaveBeenCalled()
     expect(mocks.dialog.showErrorBox).toHaveBeenCalled()
   })

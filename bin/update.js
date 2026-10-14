@@ -18,7 +18,7 @@ const { values, positionals: [pid, name, spec] } = parseArgs({
 })
 
 if (values.help || !spec) {
-  console.error('Usage: node installer.js <pid> <package> <spec: name@version or github:owner/repo#tag> [--reopen <bin path inside the package>]')
+  console.error('Usage: node update.js <pid> <package> <spec: name@version or github:owner/repo#tag> [--reopen <bin path inside the package>]')
   process.exit(1)
 }
 

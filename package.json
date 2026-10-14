@@ -5,8 +5,6 @@
   "description": "Self-update and launcher shortcuts for Electron apps installed from npm or GitHub, private repos too (npm i -g / npx) — no installers, no code signing",
   "license": "MIT",
   "author": "dichev <dichev.lab@gmail.com>",
-  "homepage": "https://github.com/dichev/electron-update-from-npm#readme",
-  "bugs": "https://github.com/dichev/electron-update-from-npm/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dichev/electron-update-from-npm.git"
@@ -24,8 +22,8 @@
       "default": "./src/launch-mode.js"
     }
   },
-  "types": "./types/index.d.ts",
   "files": [
+    "bin",
     "src",
     "types"
   ],
@@ -49,24 +47,13 @@
     "electron",
     "electron-updater",
     "auto-update",
-    "autoupdate",
-    "auto-updater",
     "self-update",
-    "updater",
-    "update",
     "npm",
     "npx",
-    "npm-global",
     "github",
-    "git",
     "private-repo",
-    "no-installer",
-    "installer",
-    "distribution",
-    "shortcuts",
     "desktop-shortcut",
     "start-menu",
-    "launcher",
     "windows",
     "macos"
   ]

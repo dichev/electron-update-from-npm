@@ -1,2 +1,2 @@
-export { NpmUpdater } from './NpmUpdater.js'
-export { LAUNCH_MODES, launchMode } from './launch-mode.js'
+export { NpmUpdater } from './updater.js'
+export { LAUNCH_MODES } from './launch-mode.js'
