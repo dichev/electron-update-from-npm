@@ -23,11 +23,14 @@ export async function latestTag(source) {
   const urls = [hosted.https({ noGitPlus: true, noCommittish: true }), hosted.sshurl({ noGitPlus: true, noCommittish: true })] // as npm tries them
   const failures = []
   for (const url of urls) {
-    const stdout = await lsRemoteTags(url).catch(err => {
+    let stdout
+    try {
+      stdout = await lsRemoteTags(url)
+    } catch (err) {
       if (err.problem) throw err
       failures.push(err)
-    })
-    if (stdout === undefined) continue
+      continue
+    }
     const { tag, version } = highestTag(stdout)
     return { latest: version, spec: hosted.shortcut({ committish: tag }) }
   }

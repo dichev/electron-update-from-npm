@@ -40,13 +40,16 @@ async function launchAndInstall(mode, options) {
 // The spawned command line, from `node` on (@windows it sits behind `cmd /c start <title>`)
 function spawnedArgv() {
   const [command, args] = mocks.spawn.mock.calls[0]
-  return [command, ...args]
+  const argv = [command, ...args]
+  return argv.slice(argv.indexOf('node'))
 }
 
-function publish(version, { ok = true } = {}) {
-  if (ok) mocks.latestVersion.mockResolvedValue(version)
-  else mocks.latestVersion.mockRejectedValue(new Error('Request failed with status code 503'))
-  return mocks.latestVersion
+function publish(version) {
+  return mocks.latestVersion.mockResolvedValue(version)
+}
+
+function registryDown() {
+  mocks.latestVersion.mockRejectedValue(new Error('Request failed with status code 503'))
 }
 
 let updateProcess // the spawned update script; each test decides whether it emits 'spawn' or 'error'
@@ -103,7 +106,7 @@ describe('check', () => {
   })
 
   it('stays quiet when the registry fails', async () => {
-    publish('9.9.9', { ok: false })
+    registryDown()
     const updater = await launch('npm-global')
     expect(await updater.check()).toBeNull()
   })
@@ -130,12 +133,12 @@ describe('a later check', () => {
     publish('1.11.0')
     const updater = await launch('npm-global')
     await updater.check()
-    publish('9.9.9', { ok: false })
+    registryDown()
     expect(await updater.check()).toMatchObject({ latest: '1.11.0' })
   })
 
   it('lets a later check succeed after a failed one', async () => {
-    publish('9.9.9', { ok: false })
+    registryDown()
     const updater = await launch('npm-global')
     expect(await updater.check()).toBeNull()
     publish('1.11.0')
@@ -255,7 +258,7 @@ describe('install', () => {
   it('hands off to the update script with everything it needs, then quits once it runs', async () => {
     publish('1.11.0')
     await launchAndInstall('npm-global')
-    expect(spawnedArgv().slice(-7)).toEqual([
+    expect(spawnedArgv()).toEqual([
       'node',
       UPDATE_SCRIPT,
       String(process.pid),

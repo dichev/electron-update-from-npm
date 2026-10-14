@@ -4,7 +4,6 @@ import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, clipboard, dialog } from 'electron'
-import latestVersion from 'latest-version'
 import semver from 'semver'
 import { LAUNCH_MODES, launchMode } from './launch-mode.js'
 import { writeShortcuts } from './shortcuts.js'
@@ -109,6 +108,7 @@ function binPath({ name, bin }) {
 }
 
 async function latestOnNpm(name) {
+  const { default: latestVersion } = await import('latest-version') // ~40 ms of imports, kept off app startup
   const latest = await latestVersion(name)
   return { latest, spec: `${name}@${latest}` }
 }
