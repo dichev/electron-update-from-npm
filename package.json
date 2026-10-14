@@ -1,15 +1,15 @@
 {
-  "name": "electron-npm-installer",
+  "name": "electron-update-from-npm",
   "version": "0.1.0",
   "type": "module",
   "description": "Self-update and launcher shortcuts for Electron apps distributed through npm (npm i -g / npx) — no installers, no code signing",
   "license": "MIT",
   "author": "dichev <dichev.lab@gmail.com>",
-  "homepage": "https://github.com/dichev/electron-npm-installer#readme",
-  "bugs": "https://github.com/dichev/electron-npm-installer/issues",
+  "homepage": "https://github.com/dichev/electron-update-from-npm#readme",
+  "bugs": "https://github.com/dichev/electron-update-from-npm/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dichev/electron-npm-installer.git"
+    "url": "git+https://github.com/dichev/electron-update-from-npm.git"
   },
   "engines": {
     "node": ">=22"

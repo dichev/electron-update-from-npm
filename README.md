@@ -1,4 +1,4 @@
-# electron-npm-installer
+# electron-update-from-npm
 
 What an installer would give your Electron app, for apps that people install with npm (`npm i -g my-app` or `npx my-app`): auto-update and launcher shortcuts.
 
@@ -7,7 +7,7 @@ No installers, no code signing, no release server — npm is already your releas
 ## Install
 
 ```sh
-npm install electron-npm-installer
+npm install electron-update-from-npm
 ```
 
 Requires Electron 30+. ESM-only (from CommonJS, use `await import()`).
@@ -15,7 +15,7 @@ Requires Electron 30+. ESM-only (from CommonJS, use `await import()`).
 ## Auto-update
 
 ```js
-import { checkForUpdate, installUpdate } from 'electron-npm-installer'
+import { checkForUpdate, installUpdate } from 'electron-update-from-npm'
 
 const update = await checkForUpdate() // → { name: 'my-app', current: '1.2.0', latest: '1.3.0', mode: 'npm-global', spec: 'my-app@1.3.0' }, or null
 installUpdate()                       // installs that version: closes the app, updates it, opens it again
@@ -32,7 +32,7 @@ setInterval(() => checkForUpdate({ fresh: true }).then(update => update?.spec &&
 No update UI of your own? Let the package ask in a native dialog:
 
 ```js
-import { promptForUpdate } from 'electron-npm-installer'
+import { promptForUpdate } from 'electron-update-from-npm'
 
 app.whenReady().then(() => promptForUpdate()) // "My App 1.3.0 is available" → Update now / Later
 ```
@@ -68,7 +68,7 @@ It uses the same git credentials as `npm i -g`, but never asks for them in the b
 ## Shortcuts
 
 ```js
-import { createShortcuts } from 'electron-npm-installer'
+import { createShortcuts } from 'electron-update-from-npm'
 
 createShortcuts({ appId: 'com.example.my-app', name: 'My App', description: 'What my app does' }) // before the first window
 ```
@@ -84,7 +84,7 @@ To remove them, delete `My App*.lnk` from the Start Menu and Desktop, or `~/Appl
 ## Launch mode
 
 ```js
-import { LAUNCH_MODES, launchMode } from 'electron-npm-installer/launch-mode' // no electron import: plain-node scripts can use it too
+import { LAUNCH_MODES, launchMode } from 'electron-update-from-npm/launch-mode' // no electron import: plain-node scripts can use it too
 
 launchMode(app.getAppPath()) // → 'npm-global', 'npx-temp' (npx's temporary copy) or 'npm-start' (a repo checkout); 'npm-dev' with { dev: true }
 ```

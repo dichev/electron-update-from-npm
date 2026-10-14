@@ -20,7 +20,7 @@ export function createShortcuts({ appId = `com.electron.${appPackage().name}`, n
   // Existing shortcuts are re-pointed on every launch (the last launched install wins);
   // missing ones are created once per install, so a deleted shortcut stays deleted until the next `npm i -g`.
   // npm recreates the package dir on every (re)install, so its birth time identifies the install.
-  const stateFile  = join(app.getPath('userData'), 'electron-npm-installer.json')
+  const stateFile  = join(app.getPath('userData'), 'electron-update-from-npm.json')
   const created    = readJson(stateFile)
   const install    = fs.statSync(app.getAppPath()).birthtimeMs
   const newInstall = created[shortcut.name] !== install

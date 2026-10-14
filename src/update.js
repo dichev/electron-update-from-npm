@@ -22,7 +22,7 @@ export function checkForUpdate({ dev = false, fresh = false, source } = {}) {
   launch ??= { mode: launchMode(app.getAppPath(), { dev }), source } // can't change while the app runs, so a fresh check needn't repeat them
   return checked = fetchNewer(launch)
     .catch(err => {
-      if (!err.problem) console.warn('[electron-npm-installer] check failed:', err.message)
+      if (!err.problem) console.warn('[electron-update-from-npm] check failed:', err.message)
       // Offline for a moment, or signed out since, shouldn't drop an update already found: its install can still sign in
       if (answer?.spec || !err.problem) return answer
       return { problem: err.problem, message: err.message, fix: err.fix }

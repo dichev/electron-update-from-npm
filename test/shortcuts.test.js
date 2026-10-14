@@ -69,7 +69,7 @@ describe('createShortcuts', () => {
   it('recreates deleted shortcuts on the next install', async () => {
     await launch()
     fs.rmSync(join(mocks.dirs.desktop, 'My App.lnk'))
-    fs.writeFileSync(join(mocks.dirs.userData, 'electron-npm-installer.json'), JSON.stringify({ 'My App': 1 })) // an older install's birth time
+    fs.writeFileSync(join(mocks.dirs.userData, 'electron-update-from-npm.json'), JSON.stringify({ 'My App': 1 })) // an older install's birth time
     vi.clearAllMocks()
     await launch()
     expect(written().map(([, mode]) => mode).sort()).toEqual(['create', 'replace'])
