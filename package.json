@@ -5,12 +5,11 @@
   "description": "Self-update and launcher shortcuts for Electron apps distributed through npm (npm i -g / npx) — no installers, no code signing",
   "license": "MIT",
   "author": "dichev <dichev.lab@gmail.com>",
-  "homepage": "https://github.com/dichev/claude-discover/tree/main/packages/electron-npm-installer#readme",
-  "bugs": "https://github.com/dichev/claude-discover/issues",
+  "homepage": "https://github.com/dichev/electron-npm-installer#readme",
+  "bugs": "https://github.com/dichev/electron-npm-installer/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dichev/claude-discover.git",
-    "directory": "packages/electron-npm-installer"
+    "url": "git+https://github.com/dichev/electron-npm-installer.git"
   },
   "engines": {
     "node": ">=22"
