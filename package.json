@@ -1,6 +1,6 @@
 {
   "name": "electron-update-from-npm",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Self-update and launcher shortcuts for Electron apps installed from npm or GitHub, private repos too (npm i -g / npx) — no installers, no code signing",
   "license": "MIT",
@@ -22,6 +22,7 @@
       "default": "./src/launch-mode.js"
     }
   },
+  "types": "./types/index.d.ts",
   "files": [
     "bin",
     "src",
@@ -29,7 +30,8 @@
   ],
   "scripts": {
     "start": "electron example",
-    "test": "vitest run"
+    "test": "vitest run",
+    "publish:patch": "npm test && npm version patch && git push --follow-tags"
   },
   "dependencies": {
     "hosted-git-info": "^10.1.1",
