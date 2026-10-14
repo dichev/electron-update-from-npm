@@ -12,27 +12,21 @@ export function writeShortcuts(mode, packageName, { appId = `com.electron.${pack
   const shortcut = mode === LAUNCH_MODES.NPM_START || mode === LAUNCH_MODES.NPM_DEV ? { id: `${appId}.local`, name: `${name} (local)`, description } : { id: appId, name, description }
   if (process.platform === 'win32') app.setAppUserModelId(shortcut.id) // shared by the process and its shortcuts, so a pinned taskbar icon groups with the window
   if (mode === LAUNCH_MODES.NPX_TEMP || mode === LAUNCH_MODES.NPM_DEV) return // an npx cache dir is deleted later, and dev shouldn't touch the user's shortcuts
-  shortcut.icon = icon && loadIcon(resolve(app.getAppPath(), icon))
 
   const os = process.platform === 'win32' ? new WindowsLinks(shortcut) : process.platform === 'darwin' ? new MacBundle(shortcut) : null
   if (!os) return
 
-  // Existing shortcuts are re-pointed on every launch (the last launched install wins);
-  // missing ones are created once per install, so a deleted shortcut stays deleted until the next `npm i -g`.
-  // npm recreates the package dir on every (re)install, so its birth time identifies the install.
-  const stateFile  = join(app.getPath('userData'), 'electron-update-from-npm.json')
-  const created    = readJson(stateFile)
-  const install    = fs.statSync(app.getAppPath()).birthtimeMs
-  const newInstall = created[shortcut.name] !== install
-  for (const path of os.paths()) {
-    const exists = fs.existsSync(path)
-    if (!exists && !newInstall) continue
-    os.write(path, exists) // throws before the save below, so the next launch retries
-  }
-  if (newInstall) {
-    fs.mkdirSync(app.getPath('userData'), { recursive: true })
-    fs.writeFileSync(stateFile, JSON.stringify({ ...created, [shortcut.name]: install }))
-  }
+  // Written on the first launch of each install or update, not on every launch, so a deleted shortcut stays deleted
+  // until the next `npm i -g`. npm recreates the package dir on every (re)install, so its birth time identifies the install.
+  const stateFile = join(app.getPath('userData'), 'electron-update-from-npm.json')
+  const written   = readJson(stateFile)
+  const install   = fs.statSync(app.getAppPath()).birthtimeMs
+  if (written[shortcut.name] === install) return
+
+  shortcut.icon = icon && loadIcon(resolve(app.getAppPath(), icon))
+  for (const path of os.paths()) os.write(path, fs.existsSync(path)) // throws before the save below, so the next launch retries
+  fs.mkdirSync(app.getPath('userData'), { recursive: true })
+  fs.writeFileSync(stateFile, JSON.stringify({ ...written, [shortcut.name]: install }))
 }
 
 function readJson(path) {

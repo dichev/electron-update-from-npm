@@ -1,4 +1,4 @@
-// createShortcuts() writes launchers for an `npm i -g` install, once per install, and re-points the ones still there.
+// createShortcuts() writes launchers for an `npm i -g` install on the first launch of each install or update, not on every launch.
 // These tests pin when shortcuts are written, that a deleted one stays deleted until the next install, which name
 // and app id each kind of launch gets, that a failed write is retried rather than thrown, and the icon conversion.
 // They run the @windows flavour on any OS; @macOS needs a real Electron.app, except with an icon.
@@ -30,6 +30,9 @@ async function launch(options = { appId: 'com.example.my-app', name: 'My App' },
   new NpmUpdater({ name: 'my-app', version: '1.0.0' }, updaterOptions).createShortcuts(options)
 }
 
+// Makes the next launch look like the first one after an update: the stored birth time is an older install's
+const update = () => fs.writeFileSync(join(mocks.dirs.userData, 'electron-update-from-npm.json'), JSON.stringify({ 'My App': 1 }))
+
 const written = () => mocks.shell.writeShortcutLink.mock.calls.map(([path, mode, { appUserModelId }]) => [basename(path), mode, appUserModelId])
 
 beforeEach(() => {
@@ -58,19 +61,19 @@ describe('createShortcuts', () => {
     expect(mocks.app.setAppUserModelId).toHaveBeenCalledWith('com.example.my-app')
   })
 
-  it('keeps a deleted shortcut deleted until the next install, and re-points the rest', async () => {
+  it('writes nothing on later launches of the same install, so a deleted shortcut stays deleted', async () => {
     await launch()
     fs.rmSync(join(mocks.dirs.desktop, 'My App.lnk'))
     vi.clearAllMocks()
     await launch()
-    expect(written()).toEqual([['My App.lnk', 'replace', 'com.example.my-app']])
-    expect(fs.existsSync(join(mocks.dirs.desktop, 'My App.lnk'))).toBe(false)
+    expect(written()).toEqual([])
+    expect(mocks.app.setAppUserModelId).toHaveBeenCalledWith('com.example.my-app')
   })
 
-  it('recreates deleted shortcuts on the next install', async () => {
+  it('re-points existing shortcuts and recreates deleted ones after an update', async () => {
     await launch()
     fs.rmSync(join(mocks.dirs.desktop, 'My App.lnk'))
-    fs.writeFileSync(join(mocks.dirs.userData, 'electron-update-from-npm.json'), JSON.stringify({ 'My App': 1 })) // an older install's birth time
+    update()
     vi.clearAllMocks()
     await launch()
     expect(written().map(([, mode]) => mode).sort()).toEqual(['create', 'replace'])
@@ -129,9 +132,10 @@ describe('createShortcuts', () => {
       expect(file.subarray(22).toString()).toBe('icon256')
     })
 
-    it('writes a new logo to a new .ico, as Explorer caches icons by path, and removes the old one', async () => {
+    it('writes a new logo to a new .ico after an update, as Explorer caches icons by path, and removes the old one', async () => {
       await launch({ name: 'My App', icon: 'icon.png' })
       const [old] = icos()
+      update()
       vi.clearAllMocks()
       await launch({ name: 'My App', icon: 'logo.png' })
       const [ico] = icos()
