@@ -1,9 +1,10 @@
 // Tells an `npm i -g` install of an Electron app about a newer release (on npm, or tagged in its git repo) and installs
 // it; an npx run is offered the global install instead. A checkout only checks in `dev`, to debug the flow.
-import { spawn } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { app, clipboard, dialog } from 'electron'
 import semver from 'semver'
 import { LAUNCH_MODES, launchMode } from './launch-mode.js'
@@ -135,7 +136,7 @@ function binPath({ name, bin }) {
 }
 
 async function latestOnNpm(name) {
-  const { default: latestVersion } = await import('latest-version') // ~40 ms of imports, kept off app startup
-  const latest = await latestVersion(name)
+  // npm itself, so private registries and auth resolve as they will for the install
+  const latest = (await promisify(exec)(`npm view ${name} version`, { timeout: 30_000, windowsHide: true })).stdout.trim()
   return { latest, spec: `${name}@${latest}` }
 }

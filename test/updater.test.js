@@ -11,11 +11,10 @@ const mocks = vi.hoisted(() => ({
   clipboard: { writeText: vi.fn() },
   spawn: vi.fn(),
   execFile: vi.fn(),
-  latestVersion: vi.fn(),
+  exec: vi.fn(),
 }))
 vi.mock('electron', () => ({ app: mocks.app, dialog: mocks.dialog, clipboard: mocks.clipboard }))
-vi.mock('latest-version', () => ({ default: mocks.latestVersion }))
-vi.mock('node:child_process', () => ({ spawn: mocks.spawn, execFile: mocks.execFile }))
+vi.mock('node:child_process', () => ({ spawn: mocks.spawn, exec: mocks.exec, execFile: mocks.execFile }))
 
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
@@ -45,17 +44,19 @@ function spawnedArgv() {
 }
 
 function publish(version) {
-  return mocks.latestVersion.mockResolvedValue(version)
+  return mocks.exec.mockImplementation((cmd, opts, done) => done(null, { stdout: `${version}
+` }))
 }
 
 function registryDown() {
-  mocks.latestVersion.mockRejectedValue(new Error('Request failed with status code 503'))
+  mocks.exec.mockImplementation((cmd, opts, done) => done(new Error('npm error code E503')))
 }
 
 let spawnError // set by a test to make starting the update script fail
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.exec.mockReset()
   mocks.execFile.mockReset()
   spawnError = null
   mocks.spawn.mockImplementation(() => {
@@ -94,7 +95,7 @@ describe('check', () => {
     const registry = publish('1.11.0')
     const updater = await launch('npm-global')
     await updater.check()
-    expect(registry).toHaveBeenCalledWith('my-app')
+    expect(registry.mock.calls[0][0]).toBe('npm view my-app version')
   })
 
   it('never asks the registry from a local checkout', async () => {
@@ -107,7 +108,7 @@ describe('check', () => {
   it('offers an npx run the global install at once, without asking the registry', async () => {
     const updater = await launch('npx-temp')
     expect(await updater.check()).toEqual({ type: 'install', spec: 'my-app' })
-    expect(mocks.latestVersion).not.toHaveBeenCalled()
+    expect(mocks.exec).not.toHaveBeenCalled()
   })
 
   it('stays quiet when the registry fails', async () => {
@@ -131,7 +132,7 @@ describe('a later check', () => {
     await updater.check()
     publish('1.12.0')
     expect(await updater.check()).toEqual({ type: 'update', current: '1.10.1', latest: '1.12.0', spec: 'my-app@1.12.0' })
-    expect(mocks.latestVersion).toHaveBeenCalledTimes(2)
+    expect(mocks.exec).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the previous answer when it fails', async () => {
@@ -272,7 +273,7 @@ describe('install', () => {
     publish('1.11.0')
     const updater = await launch('npm-global')
     await updater.check()
-    mocks.latestVersion.mockReturnValue(new Promise(() => {})) // a re-check that never answers
+    mocks.exec.mockImplementation(() => {}) // a re-check that never answers
     updater.check()
     await updater.install()
     expect(spawnedArgv()).toContain('my-app@1.11.0')
@@ -393,6 +394,6 @@ describe('prompt', () => {
     await (await launch('npx-temp')).prompt({ offerInstall: true })
     expect(mocks.dialog.showMessageBox.mock.calls[0][0].message).toBe('Install my-app?')
     expect(spawnedArgv().slice(-6)).toEqual(['my-app', 'my-app', '--reopen', 'bin/my-app.mjs', '--current', DIRS['npx-temp']])
-    expect(mocks.latestVersion).not.toHaveBeenCalled()
+    expect(mocks.exec).not.toHaveBeenCalled()
   })
 })
