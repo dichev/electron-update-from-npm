@@ -60,7 +60,7 @@ export class NpmUpdater {
   constructor(pkg: AppPackage, options?: NpmUpdaterOptions)
   /** How the app was launched: `npm-global`, `npx-temp`, `npm-start` (a repo checkout), or `npm-dev` (with `dev`). */
   readonly launchMode: LaunchMode
-  /** Writes @windows Start Menu + Desktop shortcuts and @macOS an ~/Applications launcher, for an `npm i -g` install. Call before any window is created. */
+  /** Writes @windows Start Menu + Desktop shortcuts and @macOS an ~/Applications launcher, for an `npm i -g` install. Call before any window is created. Never throws: a failed write is logged and retried on the next launch. */
   createShortcuts(options?: ShortcutOptions): void
   /** Asks for a newer version; calls made while a check is running share it. Under npx, resolves to an `InstallOffer` at once. Resolves to null when up to date, from a repo checkout, or on a passing failure (keeping an update already found). */
   check(): Promise<Update | InstallOffer | UpdateProblem | null>

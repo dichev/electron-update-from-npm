@@ -70,7 +70,7 @@ updater.createShortcuts({ // Start Menu + Desktop on Windows, ~/Applications on 
   name,                 // shortcut name (default: app.getName()); a repo checkout gets "<name> (local)"
   appId,                // reverse-DNS app id (default: com.electron.<package name>)
   description,          // Windows tooltip
-})
+})                      // never throws: a failed write is logged, and retried on the next launch
 
 await updater.prompt({ offerInstall: false })        // optional: a native "Update now / Later" dialog instead of your own UI;
                                                      // offerInstall also asks npx runs to install globally

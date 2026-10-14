@@ -1,6 +1,7 @@
 // createShortcuts() writes launchers for an `npm i -g` install, once per install, and re-points the ones still there.
-// These tests pin when shortcuts are written, that a deleted one stays deleted until the next install, and which
-// name and app id each kind of launch gets. They run the @windows flavour on any OS; @macOS needs a real Electron.app.
+// These tests pin when shortcuts are written, that a deleted one stays deleted until the next install, which name
+// and app id each kind of launch gets, and that a failed write is retried rather than thrown.
+// They run the @windows flavour on any OS; @macOS needs a real Electron.app.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -90,6 +91,18 @@ describe('createShortcuts', () => {
     await launch(undefined, config)
     expect(written()).toEqual([])
     expect(mocks.app.setAppUserModelId).toHaveBeenCalledWith(appId)
+  })
+
+  it('logs a failed write instead of throwing, still sets the app id, and retries on the next launch', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.shell.writeShortcutLink.mockReturnValueOnce(false)
+    await expect(launch()).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledWith('[electron-update-from-npm] shortcuts failed:', expect.stringContaining('cannot write'))
+    expect(mocks.app.setAppUserModelId).toHaveBeenCalledWith('com.example.my-app')
+    vi.clearAllMocks()
+    await launch()
+    expect(written().map(([, mode]) => mode)).toEqual(['create', 'create'])
+    warn.mockRestore()
   })
 
   it('defaults the app id to the package name and the shortcut name to the app name', async () => {

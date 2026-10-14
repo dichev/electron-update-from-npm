@@ -32,9 +32,14 @@ export class NpmUpdater {
     return this.#mode
   }
 
-  // Call before any window is created, so the window picks up the app id
+  // Call before any window is created, so the window picks up the app id.
+  // Never throws: a missing launcher isn't worth failing the app's startup over, and the next launch retries.
   createShortcuts(options) {
-    writeShortcuts(this.#mode, this.#pkg.name, options)
+    try {
+      writeShortcuts(this.#mode, this.#pkg.name, options)
+    } catch (err) {
+      console.warn('[electron-update-from-npm] shortcuts failed:', err.message)
+    }
   }
 
   // Calls made while a check is running share it
