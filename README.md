@@ -1,8 +1,13 @@
 # electron-update-from-npm
 
-What an installer would give your Electron app, for apps that people install with npm (`npm i -g my-app` or `npx my-app`): auto-update and launcher shortcuts.
+Publish your Electron app to npm, and people can run it without an installer:
 
-No installers, no code signing, no release server — npm is already your release channel, so updating is just `npm i -g my-app@latest`. This package does that for you, from inside the app.
+```sh
+npx my-app        # try it
+npm i -g my-app   # install it, then launch with `my-app`
+```
+
+This package adds what an installer would have given you: auto-update and Start Menu / Desktop shortcuts. No code signing or release server: `npm publish` is your release.
 
 ## Install
 
@@ -10,89 +15,76 @@ No installers, no code signing, no release server — npm is already your releas
 npm install electron-update-from-npm
 ```
 
-Requires Electron 30+. ESM-only (from CommonJS, use `await import()`).
+Requires Electron 30+ and npm (not pnpm or yarn). ESM-only (from CommonJS, use `await import()`).
 
-## Auto-update
-
-```js
-import { checkForUpdate, installUpdate } from 'electron-update-from-npm'
-
-const update = await checkForUpdate() // → { name: 'my-app', current: '1.2.0', latest: '1.3.0', mode: 'npm-global', spec: 'my-app@1.3.0' }, or null
-installUpdate()                       // installs that version: closes the app, updates it, opens it again
-```
-
-Show a "New version available" button when `checkForUpdate()` returns something, and call `installUpdate()` when it's clicked.
-
-`checkForUpdate()` checks once and shares the answer. For an app that stays open for days, ask again now and then:
+## API
 
 ```js
-setInterval(() => checkForUpdate({ fresh: true }).then(update => update?.spec && showUpdateButton(update)), 6 * 60 * 60_000)
+await checkForUpdate({
+  dev: false,           // check from a repo checkout too (otherwise null there); the install then doesn't reopen
+  fresh: false,         // check again instead of reusing the last answer, e.g. on a timer
+  source,               // check a git repo instead of npm, e.g. 'github:owner/repo' (see Installing from npm or git)
+})                      // → { name, current, latest, mode, spec }, { problem, message, fix }, or null; under npx always a result
+
+await installUpdate()   // install what the last check found: close, npm i -g, reopen via your package.json `bin` (the old version if it failed)
+
+createShortcuts({       // Start Menu + Desktop on Windows, ~/Applications on macOS; once per npm i -g, none under npx
+  name,                 // shortcut name (default: app.getName()); a repo checkout gets "<name> (local)"
+  appId,                // reverse-DNS app id (default: com.electron.<package name>)
+  description,          // Windows tooltip
+  dev: false,           // write no shortcuts from a repo checkout
+})
+
+launchMode(app.getAppPath()) // 'npm-global' | 'npx-temp' | 'npm-start' (repo checkout) | 'npm-dev' (with { dev: true })
+                             // also in 'electron-update-from-npm/launch-mode', without the electron import
+
+await promptForUpdate({ npx: false, ...checkOptions }) // optional: a native "Update now / Later" dialog instead of your own UI
 ```
 
-No update UI of your own? Let the package ask in a native dialog:
+## Quick example
 
 ```js
-import { promptForUpdate } from 'electron-update-from-npm'
+import { app, BrowserWindow } from 'electron'
+import { checkForUpdate, createShortcuts, installUpdate, promptForUpdate } from 'electron-update-from-npm'
 
-app.whenReady().then(() => promptForUpdate()) // "My App 1.3.0 is available" → Update now / Later
+createShortcuts({ name: 'My App' }) // before the first window
+
+app.whenReady().then(async () => {
+  const win = new BrowserWindow()
+  win.loadFile('index.html')
+
+  // Your own update UI
+  const update = await checkForUpdate()
+  if (update?.spec) showUpdateButton(update.latest, () => installUpdate())
+
+  // Or a native dialog: "My App 1.3.0 is available" → Update now / Later (skips npx runs unless { npx: true })
+  promptForUpdate()
+})
 ```
 
-npx runs aren't asked by default, since they'd see it on every launch. Pass `promptForUpdate({ npx: true })` to offer them a global install.
-
-To see the dialog, run `npm start` from a clone of this package ([example/update-prompt.js](example/update-prompt.js)). The example poses as an old `electron-find-overlay`, so **Update now** really installs that package globally.
-
-Your app's name and `bin` are read from its `package.json`. Keep this package out of your main-process bundle (most Electron bundlers externalize dependencies by default): it starts its `installer.js` from its own folder.
-
-What `checkForUpdate()` returns:
-
-- **Installed with `npm i -g`:** the new version, if there is one.
-- **Run with `npx`:** always returns a result, so you can offer a proper global install (npx's copy is temporary).
-- **Run from a repo checkout:** always `null`. Pass `checkForUpdate({ dev: true })` to try the flow anyway; it updates your global install and doesn't reopen.
-
-### Installed from git
-
-For an app installed with `npm i -g github:owner/repo#…` rather than from npm, point the check at the repo:
+## Installing from npm or git
 
 ```js
-checkForUpdate({ source: 'github:owner/repo' }) // → { …, latest: '0.1.0-build.42', spec: 'github:owner/repo#v0.1.0-build.42' }
+// From npm (default), for `npm i -g my-app` or `npx my-app`: checks npm's latest version
+await checkForUpdate()
+// → { ..., latest: '1.3.0', spec: 'my-app@1.3.0' }
+
+// From git, for `npm i -g github:owner/repo`: checks the repo's v<version> tags instead
+await checkForUpdate({ source: 'github:owner/repo' }) // promptForUpdate takes it too
+// → { ..., latest: '0.1.0-build.42', spec: 'github:owner/repo#v0.1.0-build.42' }, the highest tag
+// → { problem: 'sign-in' | 'git-missing', message, fix } when git can't sign in or isn't installed (promptForUpdate shows it)
+
+// So tag each build v<version>, matching its package.json version, e.g. in CI:
+//   npm pkg set version=0.1.0-build.${{ github.run_number }}
 ```
 
-The check reads the repo's tags with `git ls-remote`, takes the highest `v<version>` tag, and installs exactly that tag. So your publishing workflow has to tag every build `v<version>`, matching the version it sets in `package.json`, and grow that version each time, e.g. `npm pkg set version=0.1.0-build.${{ github.run_number }}` (semver orders `-build.42` after `-build.9`). Each tag keeps its build in the repo for good, so prune old ones (keep the last 20 or so).
+## Bundling
 
-It uses the same git credentials as `npm i -g`, but never asks for them in the background. When git can't sign in, or isn't installed, `checkForUpdate()` returns a problem instead of an update, for you to show (`promptForUpdate({ source })` shows it once per launch):
+If you bundle your main process, keep this package external, so it stays in `node_modules` next to the `installer.js` it starts. By default electron-vite 5+ does this for everything in `dependencies`, but elsewhere mark it yourself:
 
 ```js
-{ problem: 'sign-in', message: "git couldn't sign in to github.com", fix: 'git ls-remote https://github.com/owner/repo.git' } // run once in a terminal
+build: { rollupOptions: { external: ['electron-update-from-npm'] } } // Vite; esbuild: --external:electron-update-from-npm
 ```
-
-## Shortcuts
-
-```js
-import { createShortcuts } from 'electron-update-from-npm'
-
-createShortcuts({ appId: 'com.example.my-app', name: 'My App', description: 'What my app does' }) // before the first window
-```
-
-On Windows this adds Start Menu and Desktop shortcuts, and on macOS an app in `~/Applications`. Linux is skipped.
-
-- They're created once per install: if the user deletes one, it stays deleted until the next `npm i -g`.
-- A repo checkout gets its own `My App (local)` shortcuts, so both stay launchable. Pass `dev: true` while developing to leave the user's shortcuts alone.
-- npx runs get none, since npx's copy is temporary.
-
-To remove them, delete `My App*.lnk` from the Start Menu and Desktop, or `~/Applications/My App*.app`.
-
-## Launch mode
-
-```js
-import { LAUNCH_MODES, launchMode } from 'electron-update-from-npm/launch-mode' // no electron import: plain-node scripts can use it too
-
-launchMode(app.getAppPath()) // → 'npm-global', 'npx-temp' (npx's temporary copy) or 'npm-start' (a repo checkout); 'npm-dev' with { dev: true }
-```
-
-## Good to know
-
-- Works with npm only, not pnpm or yarn.
-- If an update fails, the old version opens again.
 
 ## License
 
