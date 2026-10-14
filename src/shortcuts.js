@@ -1,15 +1,18 @@
 // Launcher shortcuts for an `npm i -g` install: @windows Start Menu + Desktop .lnk files, @macOS an ~/Applications bundle.
 // Written from the app rather than a postinstall: npm runs no uninstall hooks anyway, and plain node has no shortcut API.
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
-import { join } from 'node:path'
-import { app, shell } from 'electron'
+import { join, resolve } from 'node:path'
+import { app, nativeImage, shell } from 'electron'
 import { LAUNCH_MODES } from './launch-mode.js'
+import { pngAt, toIco, toIcns } from './lib/icons.js'
 
-export function writeShortcuts(mode, packageName, { appId = `com.electron.${packageName}`, name = app.getName(), description = '' } = {}) {
+export function writeShortcuts(mode, packageName, { appId = `com.electron.${packageName}`, name = app.getName(), description = '', icon } = {}) {
   // An installed package and a repo checkout get their own shortcuts, so both stay launchable
   const shortcut = mode === LAUNCH_MODES.NPM_START || mode === LAUNCH_MODES.NPM_DEV ? { id: `${appId}.local`, name: `${name} (local)`, description } : { id: appId, name, description }
   if (process.platform === 'win32') app.setAppUserModelId(shortcut.id) // shared by the process and its shortcuts, so a pinned taskbar icon groups with the window
   if (mode === LAUNCH_MODES.NPX_TEMP || mode === LAUNCH_MODES.NPM_DEV) return // an npx cache dir is deleted later, and dev shouldn't touch the user's shortcuts
+  shortcut.icon = icon && loadIcon(resolve(app.getAppPath(), icon))
 
   const os = process.platform === 'win32' ? new WindowsLinks(shortcut) : process.platform === 'darwin' ? new MacBundle(shortcut) : null
   if (!os) return
@@ -36,8 +39,17 @@ function readJson(path) {
   try { return JSON.parse(fs.readFileSync(path, 'utf8')) } catch { return {} }
 }
 
+// Falls back to Electron's icon: dev runs write no shortcuts, so a bad path would otherwise only show up as missing ones
+function loadIcon(path) {
+  const image = nativeImage.createFromPath(path)
+  if (!image.isEmpty()) return image
+  console.warn(`[electron-update-from-npm] cannot read icon ${path}, using Electron's`)
+  return null
+}
+
 
 class WindowsLinks { // @windows
+  #ico
   constructor(shortcut) { this.shortcut = shortcut }
 
   paths() {
@@ -49,11 +61,23 @@ class WindowsLinks { // @windows
       target:         process.execPath,
       args:           `"${app.getAppPath()}"`,
       description:    this.shortcut.description,
-      icon:           process.execPath,
+      icon:           this.shortcut.icon ? this.#ico ??= this.#writeIco() : process.execPath,
       iconIndex:      0,
       appUserModelId: this.shortcut.id,
     })
     if (!written) throw new Error(`cannot write ${path}`)
+  }
+
+  // Kept in userData: the package dir is replaced on every update, and the shortcuts outlive it.
+  // Named by content, as Explorer caches icons by path: a new logo needs a new file to show.
+  #writeIco() {
+    const ico  = toIco(pngAt(this.shortcut.icon, 256))
+    const dir  = join(app.getPath('userData'), 'shortcut-icons', this.shortcut.id)
+    const name = `${createHash('sha1').update(ico).digest('hex').slice(0, 8)}.ico`
+    fs.mkdirSync(dir, { recursive: true })
+    for (const old of fs.readdirSync(dir)) if (old !== name) fs.rmSync(join(dir, old))
+    fs.writeFileSync(join(dir, name), ico)
+    return join(dir, name)
   }
 }
 
@@ -70,7 +94,12 @@ class MacBundle { // @macOS
     const quote = s => `'${s.replaceAll("'", `'\\''`)}'`
     fs.mkdirSync(join(path, 'Contents/MacOS'), { recursive: true })
     fs.mkdirSync(join(path, 'Contents/Resources'), { recursive: true })
-    fs.copyFileSync(join(electronApp, 'Contents/Resources/electron.icns'), join(path, 'Contents/Resources/icon.icns'))
+    const icns = join(path, 'Contents/Resources/icon.icns')
+    if (this.shortcut.icon) fs.writeFileSync(icns, toIcns({
+      ic08: pngAt(this.shortcut.icon, 256),
+      ic09: pngAt(this.shortcut.icon, 512)
+    }))
+    else fs.copyFileSync(join(electronApp, 'Contents/Resources/electron.icns'), icns)
     fs.writeFileSync(join(path, 'Contents/MacOS/launch'), [
       '#!/bin/sh',
       `exec open -n ${quote(electronApp)} --env ${quote(`PATH=${process.env.PATH}`)} --args ${quote(app.getAppPath())}`,

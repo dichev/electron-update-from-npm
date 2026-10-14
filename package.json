@@ -31,7 +31,7 @@
   "scripts": {
     "start": "electron example",
     "test": "vitest run",
-    "publish:patch": "npm test && npm version patch && git push --follow-tags"
+    "publish:patch": "npm whoami && npm test && npm version patch && npm publish && git push --follow-tags"
   },
   "dependencies": {
     "hosted-git-info": "^10.1.1",

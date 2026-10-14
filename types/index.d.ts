@@ -49,6 +49,8 @@ export interface ShortcutOptions {
   name?: string
   /** @windows The shortcut's tooltip. */
   description?: string
+  /** A PNG for the shortcuts' icon, absolute or relative to the app folder; converted to an .ico (kept in userData) and an .icns. Default: Electron's icon. */
+  icon?: string
 }
 
 export interface PromptOptions {
