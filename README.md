@@ -54,9 +54,7 @@ const updater = new NpmUpdater(pkg, { // your app's package.json: its name, vers
   dev: false,           // a dev-server run of a repo checkout: checks anyway (installing replaces your global install
 })                      // and doesn't reopen), writes no shortcuts
 
-const update = await updater.check({
-  fresh: false,         // checks are shared for the whole run (a renderer reload doesn't ask again); true asks again, e.g. on a timer
-})
+const update = await updater.check() // asks again on each call, e.g. on a timer for an app left open
 // → null                                         up to date, or a repo checkout
 // → { type: 'update', current, latest, spec }    a newer version for an npm i -g install
 // → { type: 'install', current, latest, spec }   running under npx: offer npm i -g, even at the same version
@@ -72,7 +70,7 @@ updater.createShortcuts({ // Start Menu + Desktop on Windows, ~/Applications on 
   description,          // Windows tooltip
 })
 
-await updater.prompt({ offerInstall: false, fresh }) // optional: a native "Update now / Later" dialog instead of your own UI;
+await updater.prompt({ offerInstall: false })        // optional: a native "Update now / Later" dialog instead of your own UI;
                                                      // offerInstall also asks npx runs to install globally
 
 updater.launchMode      // 'npm-global' | 'npx-temp' | 'npm-start' (repo checkout) | 'npm-dev' (with { dev: true })

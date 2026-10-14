@@ -15,7 +15,7 @@ export class NpmUpdater {
   #pkg
   #mode
   #source
-  #checked      = null
+  #checking     = null
   #answer       = null // the last settled check, so an install never waits on a re-check
   #problemShown = false
 
@@ -35,10 +35,9 @@ export class NpmUpdater {
     writeShortcuts(this.#mode, this.#pkg.name, options)
   }
 
-  // Shares the last answer, so a renderer reload doesn't ask again; `fresh` asks again for an app left open
-  check({ fresh = false } = {}) {
-    if (this.#checked && !fresh) return this.#checked
-    return this.#checked = this.#fetchNewer()
+  // Calls made while a check is running share it
+  check() {
+    return this.#checking ??= this.#fetchNewer()
       .catch(err => {
         if (!err.problem) console.warn('[electron-update-from-npm] check failed:', err.message)
         // Offline for a moment, or signed out since, shouldn't drop an update already found: its install can still sign in
@@ -46,11 +45,12 @@ export class NpmUpdater {
         return { type: 'problem', problem: err.problem, message: err.message, fix: err.fix }
       })
       .then(result => this.#answer = result)
+      .finally(() => this.#checking = null)
   }
 
   // Installs the given spec, or what the latest check found
   async install(spec) {
-    spec ??= (this.#answer ?? await this.#checked)?.spec
+    spec ??= (this.#answer ?? await this.#checking)?.spec
     if (!spec) return
     const bin = binPath(this.#pkg)
     // Dev isn't reopened: its renderer usually lives on a dev server, which dies with the app
@@ -65,8 +65,8 @@ export class NpmUpdater {
   }
 
   // A native dialog for apps without an update UI of their own. npx runs are asked only with `offerInstall`, as they'd be asked every launch
-  async prompt({ offerInstall = false, ...checkOptions } = {}) {
-    const update = await this.check(checkOptions)
+  async prompt({ offerInstall = false } = {}) {
+    const update = await this.check()
     if (update?.type === 'problem') return this.#promptProblem(update)
     if (!update || (update.type === 'install' && !offerInstall)) return
     const { response } = await dialog.showMessageBox(update.type === 'install' ? {

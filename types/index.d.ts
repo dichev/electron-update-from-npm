@@ -35,11 +35,6 @@ export interface UpdateProblem {
   fix: string
 }
 
-export interface CheckOptions {
-  /** Check again instead of sharing the last answer, e.g. on a timer for an app left open; a failed one keeps the last answer. Default: false. */
-  fresh?: boolean
-}
-
 export interface ShortcutOptions {
   /** Reverse-DNS app id, for the @windows taskbar and the @macOS bundle; a repo checkout gets `.local` appended. Default: `com.electron.<package name>`. */
   appId?: string
@@ -49,7 +44,7 @@ export interface ShortcutOptions {
   description?: string
 }
 
-export interface PromptOptions extends CheckOptions {
+export interface PromptOptions {
   /** Also ask npx runs to install the app globally; off by default, as they'd be asked on every launch. Default: false. */
   offerInstall?: boolean
 }
@@ -60,8 +55,8 @@ export class NpmUpdater {
   readonly launchMode: LaunchMode
   /** Writes @windows Start Menu + Desktop shortcuts and @macOS an ~/Applications launcher, for an `npm i -g` install. Call before any window is created. */
   createShortcuts(options?: ShortcutOptions): void
-  /** Asks for a newer version, sharing the answer until a `fresh` check. Resolves to null when up to date, from a repo checkout, or on a passing failure. */
-  check(options?: CheckOptions): Promise<Update | UpdateProblem | null>
+  /** Asks for a newer version; calls made while a check is running share it. Resolves to null when up to date, from a repo checkout, or on a passing failure (keeping an update already found). */
+  check(): Promise<Update | UpdateProblem | null>
   /** Installs the given `update.spec`, or what the latest check found: closes the app, runs `npm i -g`, then reopens it. Does nothing without an update. */
   install(spec?: string): Promise<void>
   /** Checks, and if there's an update asks "Update now / Later" in a native dialog, installing on yes; a problem is shown once per launch. Call after the app is ready. */

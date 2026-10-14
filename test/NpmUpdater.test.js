@@ -108,31 +108,30 @@ describe('check', () => {
     expect(await updater.check()).toBeNull()
   })
 
-  it('asks the registry once per launch', async () => {
+  it('shares a check that is still running', async () => {
     const registry = publish('1.11.0')
     const updater = await launch('npm-global')
-    await updater.check()
-    await updater.check()
+    await Promise.all([updater.check(), updater.check()])
     expect(registry).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('check({ fresh: true })', () => {
+describe('a later check', () => {
   it('asks npm again', async () => {
     publish('1.11.0')
     const updater = await launch('npm-dev')
     await updater.check()
     publish('1.12.0')
-    expect(await updater.check({ fresh: true })).toEqual({ type: 'update', current: '1.10.1', latest: '1.12.0', spec: 'my-app@1.12.0' })
+    expect(await updater.check()).toEqual({ type: 'update', current: '1.10.1', latest: '1.12.0', spec: 'my-app@1.12.0' })
     expect(mocks.latestVersion).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the previous answer when the fresh check fails', async () => {
+  it('keeps the previous answer when it fails', async () => {
     publish('1.11.0')
     const updater = await launch('npm-global')
     await updater.check()
     publish('9.9.9', { ok: false })
-    expect(await updater.check({ fresh: true })).toMatchObject({ latest: '1.11.0' })
+    expect(await updater.check()).toMatchObject({ latest: '1.11.0' })
   })
 
   it('lets a later check succeed after a failed one', async () => {
@@ -140,7 +139,7 @@ describe('check({ fresh: true })', () => {
     const updater = await launch('npm-global')
     expect(await updater.check()).toBeNull()
     publish('1.11.0')
-    expect(await updater.check({ fresh: true })).toMatchObject({ latest: '1.11.0' })
+    expect(await updater.check()).toMatchObject({ latest: '1.11.0' })
   })
 
   it('has install() install what the latest check found', async () => {
@@ -148,7 +147,7 @@ describe('check({ fresh: true })', () => {
     const updater = await launch('npm-global')
     await updater.check()
     publish('1.12.0')
-    await updater.check({ fresh: true })
+    await updater.check()
     await updater.install()
     expect(spawnedArgv()).toContain('my-app@1.12.0')
   })
@@ -188,7 +187,7 @@ describe('a git source', () => {
     lsRemote(TAGS, failure('fatal: unable to access'), failure('ssh: connect to host github.com port 22: timed out'))
     const updater = await launch('npm-global', GIT)
     await updater.check()
-    expect(await updater.check({ fresh: true })).toMatchObject({ latest: '1.11.0-build.10' })
+    expect(await updater.check()).toMatchObject({ latest: '1.11.0-build.10' })
   })
 
   it('reports a sign-in problem, with a command that fixes it', async () => {
@@ -216,7 +215,7 @@ describe('a git source', () => {
     lsRemote(TAGS, ...SIGN_IN)
     const updater = await launch('npm-global', GIT)
     await updater.check()
-    expect(await updater.check({ fresh: true })).toMatchObject({ latest: '1.11.0-build.10' })
+    expect(await updater.check()).toMatchObject({ latest: '1.11.0-build.10' })
   })
 
   it('reports a missing git', async () => {
@@ -234,9 +233,7 @@ describe('a git source', () => {
     lsRemote(...SIGN_IN, ...SIGN_IN)
     mocks.dialog.showMessageBox.mockResolvedValue({ response: 0 }) // Copy
     const updater = await launch('npm-global', GIT)
-    await updater.check()
     await updater.prompt()
-    await updater.check({ fresh: true })
     await updater.prompt()
     expect(mocks.dialog.showMessageBox).toHaveBeenCalledTimes(1)
     expect(mocks.clipboard.writeText).toHaveBeenCalledWith('git ls-remote https://github.com/me/my-app.git')
@@ -250,7 +247,7 @@ describe('install', () => {
     const updater = await launch('npm-global')
     await updater.check()
     mocks.latestVersion.mockReturnValue(new Promise(() => {})) // a re-check that never answers
-    updater.check({ fresh: true })
+    updater.check()
     await updater.install()
     expect(spawnedArgv()).toContain('my-app@1.11.0')
   })
@@ -298,7 +295,7 @@ describe('install', () => {
     const updater = await launch('npm-global')
     const update = await updater.check()
     publish('1.12.0')
-    await updater.check({ fresh: true })
+    await updater.check()
     await updater.install(update.spec)
     expect(spawnedArgv()).toContain('my-app@1.11.0')
   })
@@ -341,12 +338,10 @@ describe('prompt', () => {
     expect(mocks.dialog.showMessageBox).not.toHaveBeenCalled()
   })
 
-  it('reuses the launch\'s check, so a checkout can try it after a dev check', async () => {
+  it('asks a dev run too, to debug the flow', async () => {
     publish('1.11.0')
     answer('Later')
-    const updater = await launch('npm-dev')
-    await updater.check()
-    await updater.prompt()
+    await (await launch('npm-dev')).prompt()
     expect(mocks.dialog.showMessageBox).toHaveBeenCalled()
   })
 
