@@ -3,12 +3,9 @@
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { app, shell } from 'electron'
-import { appPackage } from './app.js'
-import { LAUNCH_MODES, launchMode } from './launch-mode.js'
+import { LAUNCH_MODES } from './launch-mode.js'
 
-// Call before any window is created, so the window picks up the app id
-export function createShortcuts({ appId = `com.electron.${appPackage().name}`, name = app.getName(), description = '', dev = false } = {}) {
-  const mode = launchMode(app.getAppPath(), { dev })
+export function writeShortcuts(mode, packageName, { appId = `com.electron.${packageName}`, name = app.getName(), description = '' } = {}) {
   // An installed package and a repo checkout get their own shortcuts, so both stay launchable
   const shortcut = mode === LAUNCH_MODES.NPM_START || mode === LAUNCH_MODES.NPM_DEV ? { id: `${appId}.local`, name: `${name} (local)`, description } : { id: appId, name, description }
   if (process.platform === 'win32') app.setAppUserModelId(shortcut.id) // shared by the process and its shortcuts, so a pinned taskbar icon groups with the window

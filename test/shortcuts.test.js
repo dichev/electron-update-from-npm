@@ -1,4 +1,4 @@
-// createShortcuts writes launchers for an `npm i -g` install, once per install, and re-points the ones still there.
+// createShortcuts() writes launchers for an `npm i -g` install, once per install, and re-points the ones still there.
 // These tests pin when shortcuts are written, that a deleted one stays deleted until the next install, and which
 // name and app id each kind of launch gets. They run the @windows flavour on any OS; @macOS needs a real Electron.app.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -20,13 +20,11 @@ let tmp
 function installAt(...segments) {
   mocks.dirs.app = join(tmp, ...segments, 'my-app')
   fs.mkdirSync(mocks.dirs.app, { recursive: true })
-  fs.writeFileSync(join(mocks.dirs.app, 'package.json'), JSON.stringify({ name: 'my-app' }))
 }
 
-async function launch(options = { appId: 'com.example.my-app', name: 'My App' }) {
-  vi.resetModules()
-  const { createShortcuts } = await import('../src/shortcuts.js')
-  createShortcuts(options)
+async function launch(options = { appId: 'com.example.my-app', name: 'My App' }, updaterOptions) {
+  const { NpmUpdater } = await import('../src/NpmUpdater.js')
+  new NpmUpdater({ name: 'my-app', version: '1.0.0' }, updaterOptions).createShortcuts(options)
 }
 
 const written = () => mocks.shell.writeShortcutLink.mock.calls.map(([path, mode, { appUserModelId }]) => [basename(path), mode, appUserModelId])
@@ -87,9 +85,9 @@ describe('createShortcuts', () => {
   it.each([
     ['an npx run', () => installAt('.npm', '_npx', 'ab12', 'node_modules'), {}, 'com.example.my-app'],
     ['dev', () => installAt('src'), { dev: true }, 'com.example.my-app.local'],
-  ])('writes none for %s, but still sets the app id', async (_, setup, options, appId) => {
+  ])('writes none for %s, but still sets the app id', async (_, setup, config, appId) => {
     setup()
-    await launch({ appId: 'com.example.my-app', name: 'My App', ...options })
+    await launch(undefined, config)
     expect(written()).toEqual([])
     expect(mocks.app.setAppUserModelId).toHaveBeenCalledWith(appId)
   })
