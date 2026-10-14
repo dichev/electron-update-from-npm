@@ -1,6 +1,7 @@
 // Tells an `npm i -g` install of an Electron app about a newer release (on npm, or tagged in its git repo) and installs
 // it; an npx run is offered the global install instead. A checkout only checks in `dev`, to debug the flow.
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, clipboard, dialog } from 'electron'
@@ -15,6 +16,7 @@ export class NpmUpdater {
   #mode
   #source
   #checking     = null
+  #installing   = null
   #answer       = null // the last settled check, so an install never waits on a re-check
   #problemShown = false
 
@@ -47,20 +49,36 @@ export class NpmUpdater {
       .finally(() => this.#checking = null)
   }
 
-  // Installs the given spec, or what the latest check found
-  async install(spec) {
+  // Installs the given spec, or what the latest check found. Calls made while an install is starting share it
+  install(spec) {
+    return this.#installing ??= this.#install(spec).finally(() => this.#installing = null)
+  }
+
+  async #install(spec) {
     spec ??= (this.#answer ?? await this.#checking)?.spec
+    if (!spec && this.#mode === LAUNCH_MODES.NPX_TEMP) {
+      try { ({ spec } = await this.#latest()) }
+      catch (err) {
+        if (err.problem) return this.#showProblem(`Can't install ${app.getName()}`, err)
+        return dialog.showErrorBox('Install failed', `Could not find the latest version: ${err.message}`)
+      }
+    }
     if (!spec) return
     const bin = binPath(this.#pkg)
-    // Dev isn't reopened: its renderer usually lives on a dev server, which dies with the app
-    const reopen = this.#mode !== LAUNCH_MODES.NPM_DEV && bin ? ['--reopen', bin] : []
+    // Dev isn't reopened: its renderer usually lives on a dev server, which dies with the app.
+    // A failed install reopens this copy: under npx there's no global one to fall back on
+    const reopen = this.#mode !== LAUNCH_MODES.NPM_DEV && bin ? ['--reopen', bin, '--current', app.getAppPath()] : []
     const args = [UPDATE_SCRIPT, process.pid, this.#pkg.name, spec, ...reopen].map(String)
     // The system node, not our electron.exe: npm can't replace the package while anything runs inside it.
     // @windows `start` opens a console showing the progress; its title needs a space, or node leaves it unquoted and `start` runs it
     const [command, commandArgs] = process.platform === 'win32' ? ['cmd', ['/c', 'start', `Updating ${app.getName()}`, 'node', ...args]] : ['node', args]
-    spawn(command, commandArgs, { detached: true, stdio: ['ignore', 'inherit', 'inherit'], cwd: homedir() })
-      .once('spawn', () => app.quit())
-      .once('error', err => dialog.showErrorBox('Update failed', `Could not start node: ${err.message}`))
+    const updating = spawn(command, commandArgs, { detached: true, stdio: ['ignore', 'inherit', 'inherit'], cwd: homedir() })
+    try {
+      await once(updating, 'spawn')
+      app.quit()
+    } catch (err) {
+      dialog.showErrorBox('Update failed', `Could not start node: ${err.message}`)
+    }
   }
 
   // A native dialog for apps without an update UI of their own. npx runs are asked only with `offerInstall`, as they'd be asked every launch
@@ -70,7 +88,7 @@ export class NpmUpdater {
     if (!update || (update.type === 'install' && !offerInstall)) return
     const { response } = await dialog.showMessageBox(update.type === 'install' ? {
       message: `Install ${app.getName()}?`,
-      detail:  `It's running from npx's temporary copy. Installing it keeps it around (npm i -g ${update.spec}).`,
+      detail:  `It's running from npx's temporary copy. Installing it with npm i -g keeps it around.`,
       buttons: ['Install', 'Not now'],
     } : {
       message: `${app.getName()} ${update.latest} is available`,
@@ -81,11 +99,15 @@ export class NpmUpdater {
   }
 
   // Once per launch: asking on every check would nag
-  async #promptProblem({ problem, message, fix }) {
+  async #promptProblem(problem) {
     if (this.#problemShown) return
     this.#problemShown = true
+    await this.#showProblem(`Can't check for updates to ${app.getName()}`, problem)
+  }
+
+  async #showProblem(title, { problem, message, fix }) {
     const { response } = await dialog.showMessageBox({
-      message: `Can't check for updates to ${app.getName()}`,
+      message: title,
       detail:  `${message}. ${problem === 'sign-in' ? 'Run this once in a terminal to sign in' : 'Install it'}, then restart the app:\n\n${fix}`,
       buttons: ['Copy', 'Later'],
     })
@@ -94,11 +116,16 @@ export class NpmUpdater {
 
   async #fetchNewer() {
     if (this.#mode === LAUNCH_MODES.NPM_START) return null
-    const { name, version: current } = this.#pkg
-    const { latest, spec } = this.#source ? await (await import('./git-tags.js')).latestTag(this.#source) : await latestOnNpm(name) // git only loads for a git source
-    // npx isn't updated in place: it's always offered the global install instead
-    if (this.#mode === LAUNCH_MODES.NPX_TEMP) return { type: 'install', current, latest, spec }
+    // No lookup: install() finds the latest release. A bare git spec would install the default branch instead of the latest tag
+    if (this.#mode === LAUNCH_MODES.NPX_TEMP) return this.#source ? { type: 'install' } : { type: 'install', spec: this.#pkg.name }
+    const current = this.#pkg.version
+    const { latest, spec } = await this.#latest()
     return semver.gt(latest, current) ? { type: 'update', current, latest, spec } : null
+  }
+
+  // git only loads for a git source
+  async #latest() {
+    return this.#source ? (await import('./git-tags.js')).latestTag(this.#source) : latestOnNpm(this.#pkg.name)
   }
 }
 

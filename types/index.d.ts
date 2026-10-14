@@ -15,15 +15,22 @@ export interface NpmUpdaterOptions {
   dev?: boolean
 }
 
+/** A newer version than the running one, for an `npm i -g` install. */
 export interface Update {
-  /** `update`: a newer version for an `npm i -g` install. `install`: running under npx, so the global install is offered, even at the same version. */
-  type: 'update' | 'install'
+  type: 'update'
   /** The running version. */
   current: string
   /** The latest version, on npm or in the git source's tags. */
   latest: string
   /** What `install()` passes to `npm i -g`: `name@version`, or `github:owner/repo#v<version>` for a git source. */
   spec: string
+}
+
+/** Running under npx: offer the global install. Made without a lookup, so it shows offline too. */
+export interface InstallOffer {
+  type: 'install'
+  /** What `install()` passes to `npm i -g`: the package name, so npm picks the latest. Absent for a git source, where `install()` looks up the latest tag. */
+  spec?: string
 }
 
 /** A failed check only the user can fix, reported instead of retried quietly. */
@@ -55,10 +62,10 @@ export class NpmUpdater {
   readonly launchMode: LaunchMode
   /** Writes @windows Start Menu + Desktop shortcuts and @macOS an ~/Applications launcher, for an `npm i -g` install. Call before any window is created. */
   createShortcuts(options?: ShortcutOptions): void
-  /** Asks for a newer version; calls made while a check is running share it. Resolves to null when up to date, from a repo checkout, or on a passing failure (keeping an update already found). */
-  check(): Promise<Update | UpdateProblem | null>
-  /** Installs the given `update.spec`, or what the latest check found: closes the app, runs `npm i -g`, then reopens it. Does nothing without an update. */
+  /** Asks for a newer version; calls made while a check is running share it. Under npx, resolves to an `InstallOffer` at once. Resolves to null when up to date, from a repo checkout, or on a passing failure (keeping an update already found). */
+  check(): Promise<Update | InstallOffer | UpdateProblem | null>
+  /** Installs the given `update.spec`, or what the latest check found: closes the app, runs `npm i -g`, then reopens it. Without a spec, an npx run installs the latest release; anything else does nothing. */
   install(spec?: string): Promise<void>
-  /** Checks, and if there's an update asks "Update now / Later" in a native dialog, installing on yes; a problem is shown once per launch. Call after the app is ready. */
+  /** Checks, and if there's an update asks "Update now / Later" in a native dialog, installing on yes (npx runs with `offerInstall`: "Install / Not now"); a problem is shown once per launch. Call after the app is ready. */
   prompt(options?: PromptOptions): Promise<void>
 }

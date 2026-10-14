@@ -1,5 +1,5 @@
 // check() reports a newer release on npm or in a git source's tags, only for an `npm i -g` install (and dev,
-// for debugging), and install() installs it through bin/update.js. These tests pin who is asked, when a version
+// for debugging), offers an npx run the global install, and install() installs it through bin/update.js. These tests pin who is asked, when a version
 // counts as newer, which failures stay silent and which reach the user, and what the update script is handed.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -52,12 +52,17 @@ function registryDown() {
   mocks.latestVersion.mockRejectedValue(new Error('Request failed with status code 503'))
 }
 
-let updateProcess // the spawned update script; each test decides whether it emits 'spawn' or 'error'
+let spawnError // set by a test to make starting the update script fail
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.execFile.mockReset()
-  mocks.spawn.mockImplementation(() => updateProcess = new EventEmitter())
+  spawnError = null
+  mocks.spawn.mockImplementation(() => {
+    const updating = new EventEmitter()
+    setImmediate(() => spawnError ? updating.emit('error', spawnError) : updating.emit('spawn'))
+    return updating
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
@@ -99,10 +104,10 @@ describe('check', () => {
     expect(registry).not.toHaveBeenCalled()
   })
 
-  it('offers an npx run the global install, even on the latest version', async () => {
-    publish('1.10.1')
+  it('offers an npx run the global install at once, without asking the registry', async () => {
     const updater = await launch('npx-temp')
-    expect(await updater.check()).toEqual({ type: 'install', current: '1.10.1', latest: '1.10.1', spec: 'my-app@1.10.1' })
+    expect(await updater.check()).toEqual({ type: 'install', spec: 'my-app' })
+    expect(mocks.latestVersion).not.toHaveBeenCalled()
   })
 
   it('stays quiet when the registry fails', async () => {
@@ -226,10 +231,28 @@ describe('a git source', () => {
     expect(await checkGit()).toMatchObject({ problem: 'git-missing' })
   })
 
+  it('offers an npx run the install without a spec, then installs the latest tag', async () => {
+    lsRemote(TAGS)
+    const updater = await launch('npx-temp', GIT)
+    const offer = await updater.check()
+    expect(offer).toEqual({ type: 'install' })
+    expect(mocks.execFile).not.toHaveBeenCalled()
+    await updater.install(offer.spec)
+    expect(spawnedArgv()).toContain('github:me/my-app#v1.11.0-build.10')
+  })
+
+  it('shows the fix when an npx install cannot sign in to look up the latest tag', async () => {
+    lsRemote(...SIGN_IN)
+    mocks.dialog.showMessageBox.mockResolvedValue({ response: 1 }) // Later
+    await (await launch('npx-temp', GIT)).install()
+    expect(mocks.dialog.showMessageBox.mock.calls[0][0]).toMatchObject({ message: "Can't install my-app", detail: expect.stringContaining('git ls-remote https://github.com/me/my-app.git') })
+    expect(mocks.spawn).not.toHaveBeenCalled()
+  })
+
   it('has the update script install the tag it found', async () => {
     lsRemote(TAGS)
     await launchAndInstall('npm-global', GIT)
-    expect(spawnedArgv().slice(-4)).toEqual(['my-app', 'github:me/my-app#v1.11.0-build.10', '--reopen', 'bin/my-app.mjs'])
+    expect(spawnedArgv().slice(-6)).toEqual(['my-app', 'github:me/my-app#v1.11.0-build.10', '--reopen', 'bin/my-app.mjs', '--current', DIRS['npm-global']])
   })
 
   it('shows a problem in the prompt once per launch, offering to copy the fix', async () => {
@@ -266,17 +289,17 @@ describe('install', () => {
       'my-app@1.11.0',
       '--reopen',
       'bin/my-app.mjs',
+      '--current',
+      DIRS['npm-global'],
     ])
     expect(mocks.spawn.mock.calls[0][2]).toMatchObject({ detached: true })
-    expect(mocks.app.quit).not.toHaveBeenCalled()
-    updateProcess.emit('spawn')
     expect(mocks.app.quit).toHaveBeenCalled()
   })
 
   it('stays open and says why when node cannot be started', async () => {
     publish('1.11.0')
+    spawnError = new Error('spawn node ENOENT')
     await launchAndInstall('npm-global')
-    updateProcess.emit('error', new Error('spawn node ENOENT'))
     expect(mocks.app.quit).not.toHaveBeenCalled()
     expect(mocks.dialog.showErrorBox).toHaveBeenCalled()
   })
@@ -287,10 +310,24 @@ describe('install', () => {
     expect(spawnedArgv().slice(-3)).toEqual([String(process.pid), 'my-app', 'my-app@1.11.0'])
   })
 
-  it('installs the global version from an npx run', async () => {
+  it('installs an npx run globally without a check, at the latest release', async () => {
     publish('1.10.1')
-    await launchAndInstall('npx-temp')
-    expect(spawnedArgv().slice(-4)).toEqual(['my-app', 'my-app@1.10.1', '--reopen', 'bin/my-app.mjs'])
+    await (await launch('npx-temp')).install()
+    expect(spawnedArgv().slice(-6)).toEqual(['my-app', 'my-app@1.10.1', '--reopen', 'bin/my-app.mjs', '--current', DIRS['npx-temp']])
+  })
+
+  it('starts one install for calls made while it is starting', async () => {
+    publish('1.10.1')
+    const updater = await launch('npx-temp')
+    await Promise.all([updater.install(), updater.install()])
+    expect(mocks.spawn).toHaveBeenCalledTimes(1)
+  })
+
+  it('says why when an npx run cannot find the latest release to install', async () => {
+    registryDown()
+    await (await launch('npx-temp')).install()
+    expect(mocks.dialog.showErrorBox).toHaveBeenCalled()
+    expect(mocks.spawn).not.toHaveBeenCalled()
   })
 
   it('installs the spec it is given', async () => {
@@ -348,13 +385,14 @@ describe('prompt', () => {
     expect(mocks.dialog.showMessageBox).toHaveBeenCalled()
   })
 
-  it('asks an npx run to install only when opted in', async () => {
-    publish('1.10.1')
+  it('asks an npx run to install only when opted in, offline too', async () => {
+    registryDown()
     answer('Install')
     await (await launch('npx-temp')).prompt()
     expect(mocks.dialog.showMessageBox).not.toHaveBeenCalled()
     await (await launch('npx-temp')).prompt({ offerInstall: true })
     expect(mocks.dialog.showMessageBox.mock.calls[0][0].message).toBe('Install my-app?')
-    expect(spawnedArgv()).toContain('my-app@1.10.1')
+    expect(spawnedArgv().slice(-6)).toEqual(['my-app', 'my-app', '--reopen', 'bin/my-app.mjs', '--current', DIRS['npx-temp']])
+    expect(mocks.latestVersion).not.toHaveBeenCalled()
   })
 })

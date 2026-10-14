@@ -12,13 +12,14 @@ import { parseArgs } from 'node:util'
 const { values, positionals: [pid, name, spec] } = parseArgs({
   allowPositionals: true,
   options: {
-    'reopen': { type: 'string' },
-    'help':   { type: 'boolean', short: 'h' },
+    'reopen':  { type: 'string' },
+    'current': { type: 'string' },
+    'help':    { type: 'boolean', short: 'h' },
   },
 })
 
 if (values.help || !spec) {
-  console.error('Usage: node update.js <pid> <package> <spec: name@version or github:owner/repo#tag> [--reopen <bin path inside the package>]')
+  console.error('Usage: node update.js <pid> <package> <spec: name@version or github:owner/repo#tag> [--reopen <bin path inside the package> --current <running package dir>]')
   process.exit(1)
 }
 
@@ -37,8 +38,8 @@ while (true) {
 const { status } = spawnSync(`npm i -g ${spec} --loglevel=http`, { shell: true, stdio: 'inherit' })
 if (status !== 0) await sleep(5_000) // leaves npm's error readable before the window closes
 
-// Reopen even after a failed update
+// Reopen even after a failed update: the running copy, as a failed install from npx leaves no global one
 if (values.reopen) {
-  const bin = path.join(spawnSync('npm root -g', { shell: true, encoding: 'utf8' }).stdout.trim(), name, values.reopen)
-  spawn(process.execPath, [bin], { detached: true, stdio: 'ignore' }).unref()
+  const dir = status === 0 ? path.join(spawnSync('npm root -g', { shell: true, encoding: 'utf8' }).stdout.trim(), name) : values.current
+  spawn(process.execPath, [path.join(dir, values.reopen)], { detached: true, stdio: 'ignore' }).unref()
 }

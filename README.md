@@ -36,6 +36,7 @@ app.whenReady().then(async () => {
   // Your own update UI
   const update = await updater.check()
   if (update?.type === 'update') showUpdateButton(update.latest, () => updater.install(update.spec))
+  if (update?.type === 'install') showInstallButton(() => updater.install(update.spec)) // under npx
 
   // Or a native dialog: "My App 1.3.0 is available" → Update now / Later (skips npx runs unless { offerInstall: true })
   updater.prompt()
@@ -57,9 +58,10 @@ const updater = new NpmUpdater(pkg, { // your app's package.json: its name, vers
 const update = await updater.check() // asks again on each call, e.g. on a timer for an app left open
 // → null                                         up to date, or a repo checkout
 // → { type: 'update', current, latest, spec }    a newer version for an npm i -g install
-// → { type: 'install', current, latest, spec }   running under npx: offer npm i -g, even at the same version
+// → { type: 'install', spec }                    running under npx, at once and offline too: offer npm i -g
 // → { type: 'problem', problem, message, fix }   with a source: git can't sign in or isn't installed (prompt() shows it)
-//   update.spec is what gets installed: 'my-app@1.3.0', or 'github:owner/repo#v1.3.0' with a source
+//   update.spec is what gets installed: 'my-app@1.3.0', or 'github:owner/repo#v1.3.0' with a source;
+//   for 'install' it's 'my-app', or absent with a source (install() looks up the latest tag)
 
 await updater.install(update.spec) // close, npm i -g, reopen via your package.json `bin` (the old version if it
                                    // failed); without an argument, installs what the last check found
