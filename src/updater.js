@@ -96,10 +96,12 @@ export class NpmUpdater {
       message: `Install ${app.getName()}?`,
       detail:  `It's running from npx's temporary copy. Installing it with npm i -g keeps it around.`,
       buttons: ['Install', 'Not now'],
+      cancelId: 1, // what closing the dialog answers; Electron would otherwise pick the first button
     } : {
       message: `${app.getName()} ${update.latest} is available`,
       detail:  `You have ${update.current}. Updating restarts the app.`,
       buttons: ['Update now', 'Later'],
+      cancelId: 1,
     })
     if (response === 0) await this.install(update.spec)
   }
@@ -116,6 +118,7 @@ export class NpmUpdater {
       message: title,
       detail:  `${message}. ${problem === 'sign-in' ? 'Run this once in a terminal to sign in' : 'Install it'}, then restart the app:\n\n${fix}`,
       buttons: ['Copy', 'Later'],
+      cancelId: 1,
     })
     if (response === 0) clipboard.writeText(fix)
   }
