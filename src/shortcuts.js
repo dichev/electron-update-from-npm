@@ -16,17 +16,24 @@ export function writeShortcuts(mode, packageName, { appId = `com.electron.${pack
   const os = process.platform === 'win32' ? new WindowsLinks(shortcut) : process.platform === 'darwin' ? new MacBundle(shortcut) : null
   if (!os) return
 
-  // Written on the first launch of each install or update, not on every launch, so a deleted shortcut stays deleted
-  // until the next `npm i -g`. npm recreates the package dir on every (re)install, so its birth time identifies the install.
-  const stateFile = join(app.getPath('userData'), 'electron-update-from-npm.json')
-  const written   = readJson(stateFile)
+  // A new install or update (npm recreates the package dir, so its birth time identifies it) writes them all; after that, only a change to
+  // what they contain (a moved checkout, new options or logo, a new PATH on macOS) re-points the ones still there, so a deleted one stays deleted.
+  const iconPath  = icon && resolve(app.getAppPath(), icon)
   const install   = fs.statSync(app.getAppPath()).birthtimeMs
-  if (written[shortcut.name] === install) return
+  const content   = JSON.stringify([app.getAppPath(), process.execPath, shortcut, iconPath, iconPath && fs.statSync(iconPath, { throwIfNoEntry: false })?.mtimeMs, process.platform === 'darwin' && process.env.PATH])
+  const stateFile = join(app.getPath('userData'), 'electron-update-from-npm.json')
+  const state     = readJson(stateFile)
+  const due       = os.paths().filter(path => state[path]?.install !== install || (state[path].content !== content && fs.existsSync(path)))
+  if (!due.length) return
 
-  shortcut.icon = icon && loadIcon(resolve(app.getAppPath(), icon))
-  for (const path of os.paths()) os.write(path, fs.existsSync(path)) // throws before the save below, so the next launch retries
+  shortcut.icon = iconPath && loadIcon(iconPath)
+  let failed
+  for (const path of due) {
+    try { os.write(path); state[path] = { install, content } } catch (err) { failed ??= err } // a failed one is retried on the next launch
+  }
   fs.mkdirSync(app.getPath('userData'), { recursive: true })
-  fs.writeFileSync(stateFile, JSON.stringify({ ...written, [shortcut.name]: install }))
+  fs.writeFileSync(stateFile, JSON.stringify(state))
+  if (failed) throw failed
 }
 
 function readJson(path) {
@@ -50,8 +57,8 @@ class WindowsLinks { // @windows
     return [join(app.getPath('appData'), 'Microsoft/Windows/Start Menu/Programs'), app.getPath('desktop')].map(dir => join(dir, `${this.shortcut.name}.lnk`))
   }
 
-  write(path, exists) {
-    const written = shell.writeShortcutLink(path, exists ? 'replace' : 'create', {
+  write(path) {
+    const written = shell.writeShortcutLink(path, 'create', { // 'create' overwrites an existing one
       target:         process.execPath,
       args:           `"${app.getAppPath()}"`,
       description:    this.shortcut.description,
