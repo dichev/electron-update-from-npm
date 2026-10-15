@@ -29,7 +29,8 @@
     "types"
   ],
   "scripts": {
-    "start": "electron example",
+    "example:prompt": "electron example/prompt",
+    "example:shortcuts": "electron example/shortcuts",
     "test": "vitest run",
     "publish:patch": "npm whoami && npm test && npm version patch && npm publish && git push --follow-tags"
   },
