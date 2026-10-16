@@ -11,6 +11,11 @@ import { LAUNCH_MODES, launchMode } from './launch-mode.js'
 import { writeShortcuts } from './shortcuts.js'
 
 const UPDATE_SCRIPT = join(import.meta.dirname, '../bin/update.js')
+const PROBLEM_FIXES = {
+  'sign-in':       'Run this once in a terminal to sign in',
+  'wrong-account': 'Run this in a terminal to forget that sign-in and sign in with one that can',
+  'git-missing':   'Install it',
+}
 
 export class NpmUpdater {
   #pkg
@@ -116,7 +121,7 @@ export class NpmUpdater {
   async #showProblem(title, { problem, message, fix }) {
     const { response } = await dialog.showMessageBox({
       message: title,
-      detail:  `${message}. ${problem === 'sign-in' ? 'Run this once in a terminal to sign in' : 'Install it'}, then restart the app:\n\n${fix}`,
+      detail:  `${message}. ${PROBLEM_FIXES[problem]}, then restart the app:\n\n${fix}`,
       buttons: ['Copy', 'Later'],
       cancelId: 1,
     })

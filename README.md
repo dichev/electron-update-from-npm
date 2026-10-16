@@ -59,7 +59,8 @@ const update = await updater.check() // asks again on each call, e.g. on a timer
 // → null                                         up to date, or a repo checkout
 // → { type: 'update', current, latest, spec }    a newer version for an npm i -g install
 // → { type: 'install', spec }                    running under npx, at once and offline too: offer npm i -g
-// → { type: 'problem', problem, message, fix }   with a source: git can't sign in or isn't installed (prompt() shows it)
+// → { type: 'problem', problem, message, fix }   with a source: git can't sign in, signed in as an account
+//                                                without access, or isn't installed (prompt() shows it)
 //   update.spec is what gets installed: 'my-app@1.3.0', or 'github:owner/repo#v1.3.0' with a source;
 //   for 'install' it's 'my-app', or absent with a source (install() looks up the latest tag)
 

@@ -170,7 +170,7 @@ describe('a git source', () => {
   const failure = stderr => Object.assign(new Error('Command failed: git ls-remote'), { stderr })
   const SIGN_IN = [failure("fatal: could not read Username for 'https://github.com': terminal prompts disabled"), failure('git@github.com: Permission denied (publickey).')]
   const lsRemote = (...results) => results.forEach(r => mocks.execFile.mockImplementationOnce((cmd, args, opts, done) => r instanceof Error ? done(r) : done(null, { stdout: r })))
-  const checkGit = async () => (await launch('npm-global', GIT)).check()
+  const checkGit = async (opts = GIT) => (await launch('npm-global', opts)).check()
 
   it('reports the highest version tag, to install exactly that tag', async () => {
     lsRemote(TAGS)
@@ -206,6 +206,30 @@ describe('a git source', () => {
       problem: 'sign-in',
       message: "git couldn't sign in to github.com",
       fix:     'git ls-remote https://github.com/me/my-app.git',
+    })
+  })
+
+  it.each([
+    "remote: Permission to me/my-app.git denied to someone-else.\nfatal: unable to access 'https://github.com/me/my-app.git/': The requested URL returned error: 403",
+    "remote: Repository not found.\nfatal: repository 'https://github.com/me/my-app.git/' not found",
+  ])('reports a sign-in without access to the repo, with commands that forget it and sign in again: %s', async stderr => {
+    lsRemote(failure(stderr), SIGN_IN[1])
+    expect(await checkGit()).toEqual({
+      type:    'problem',
+      problem: 'wrong-account',
+      message: "git signed in to github.com as an account that can't read me/my-app",
+      fix:     'echo url=https://github.com| git credential reject\ngit ls-remote https://github.com/me/my-app.git',
+    })
+  })
+
+  it.each([
+    ["remote: The project you were looking for could not be found or you don't have permission to view it.\nfatal: repository 'https://gitlab.com/me/my-app.git/' not found", 'git@gitlab.com: Permission denied (publickey).'],
+    ["fatal: could not read Username for 'https://gitlab.com': terminal prompts disabled", "ERROR: The project you were looking for could not be found or you don't have permission to view it."],
+  ])('reports the same on GitLab, which words it differently: %s', async (https, ssh) => {
+    lsRemote(failure(https), failure(ssh))
+    expect(await checkGit({ source: 'gitlab:me/my-app' })).toMatchObject({
+      problem: 'wrong-account',
+      message: "git signed in to gitlab.com as an account that can't read me/my-app",
     })
   })
 

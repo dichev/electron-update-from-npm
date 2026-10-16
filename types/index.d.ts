@@ -36,9 +36,9 @@ export interface InstallOffer {
 /** A failed check only the user can fix, reported instead of retried quietly. */
 export interface UpdateProblem {
   type: 'problem'
-  problem: 'sign-in' | 'git-missing'
+  problem: 'sign-in' | 'wrong-account' | 'git-missing'
   message: string
-  /** A command to run once in a terminal (sign-in), or where to get git. */
+  /** Commands to run once in a terminal, or where to get git. */
   fix: string
 }
 
