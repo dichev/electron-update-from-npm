@@ -1,6 +1,6 @@
 {
   "name": "electron-update-from-npm",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Self-update and launcher shortcuts for Electron apps installed from npm or GitHub, private repos too (npm i -g / npx) — no installers, no code signing",
   "license": "MIT",
