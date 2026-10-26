@@ -32,10 +32,10 @@
     "example:prompt": "electron example/prompt",
     "example:shortcuts": "electron example/shortcuts",
     "test": "vitest run",
-    "publish:patch": "npm whoami && npm test && npm version patch && npm publish && git push --follow-tags"
+    "publish:patch": "npm whoami && npm test && npm version patch && npm publish && git push --follow-tags && npm cache clean make-fetch-happen:request-cache:https://registry.npmjs.org/electron-update-from-npm"
   },
   "dependencies": {
-    "hosted-git-info": "^10.1.1",
+    "hosted-git-info": "^9.0.3",
     "semver": "^7.8.5"
   },
   "peerDependencies": {
